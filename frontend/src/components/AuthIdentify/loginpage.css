@@ -1,0 +1,52 @@
+.container {
+  width: 350px;
+  margin: auto;
+  padding: 20px;
+  color: white;
+}
+
+.container .icon{
+  width: 30px;
+  height: 30px;
+  object-fit:contain;
+  margin-right: 10px;
+}
+
+.header .text {
+  font-size: 32px;
+  font-weight: bold;
+  text-align: center;
+}
+
+.input {
+  display: flex;
+  align-items: center;
+  background: #33333370;
+  padding: 10px;
+  border-radius: 8px;
+  margin-bottom: 15px;
+}
+
+.input input {
+  border: none;
+  outline: none;
+  width: 100%;
+  padding-left: 10px;
+  background: transparent;
+  color: white;
+}
+
+.submit-container {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 15px;
+}
+
+.submit {
+  background: #007bff;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: white;
+  text-align: center;
+}
