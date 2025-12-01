@@ -1,13 +1,19 @@
 import React, { useEffect, useState } from "react";
 import io from "socket.io-client";
 import axios from "axios";
+import { useContext } from "react";
+import { AuthContext } from "./AuthIdentify/AuthContext"; // (Or whatever your folder path is)
 
 // Connect to backend
 const socket = io.connect("http://localhost:3001");
 
 function Chat() {
   const [room, setRoom] = useState("general");
-  const [username, setUsername] = useState("");
+  // 1. Get the user object from the "Brain" (Context)
+const { user } = useContext(AuthContext);
+
+// 2. Extract the name (or use an empty string if it's loading)
+const username = user ? user.username : "";
   const [currentMessage, setCurrentMessage] = useState("");
   const [messageList, setMessageList] = useState([]);
   const [summary, setSummary] = useState("");
@@ -82,25 +88,6 @@ function Chat() {
     marginBottom: "10px",
   };
 
-  if (!joined) {
-    return (
-      <div style={{ textAlign: "center", marginTop: "50px" }}>
-        <h3>Join A Chat</h3>
-        <input
-          type="text"
-          placeholder="Username..."
-          onChange={(e) => setUsername(e.target.value)}
-        />
-        <input
-          type="text"
-          placeholder="Room ID..."
-          value={room}
-          onChange={(e) => setRoom(e.target.value)}
-        />
-        <button onClick={joinRoom}>Join Room</button>
-      </div>
-    );
-  }
 
   return (
     <div style={containerStyle}>

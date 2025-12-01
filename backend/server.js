@@ -6,6 +6,7 @@ const dotenv = require("dotenv");
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const messageRoutes = require("./routes/messageRoutes");
+const summeryRoutes = require("./routes/summaryRoutes");
 const userRoutes = require("./routes/userRoutes");
 
 dotenv.config();
@@ -37,6 +38,7 @@ app.get("/", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/summery", summeryRoutes);
 
 // simple in memory online user tracking
 // key: userId, value: number of active sockets
@@ -82,7 +84,7 @@ io.on("connection", (socket) => {
 });
 
 // start server
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
