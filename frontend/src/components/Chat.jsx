@@ -1,45 +1,50 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useContext } from "react";
 import io from "socket.io-client";
 import axios from "axios";
-import { useContext } from "react";
-import { AuthContext } from "./AuthIdentify/AuthContext"; // (Or whatever your folder path is)
+
+// 1. Import AuthContext
+import { AuthContext } from "./AuthIdentify/AuthContext";
+
+// 2. Import your PRO components
+import ChatInput from "./Inputs & Rich Content/ChatInput";
+import ChatWindow from "./Chat Display/ChatWindow";
+import AISummaryButton from "./AI Feature/AISummaryButton";
+import SummaryPanel from "./AI Feature/SummaryPanel";
 
 // Connect to backend
 const socket = io.connect("http://localhost:3001");
 
 function Chat() {
-  const [room, setRoom] = useState("general");
-  // 1. Get the user object from the "Brain" (Context)
-const { user } = useContext(AuthContext);
+  // Get User Data from Context
+  const { user } = useContext(AuthContext);
+  const username = user ? user.username : "Guest";
+  const userId = user ? user._id : null; // <--- Critical for Database Saving!
 
-// 2. Extract the name (or use an empty string if it's loading)
-const username = user ? user.username : "";
+  const [room, setRoom] = useState("general");
   const [currentMessage, setCurrentMessage] = useState("");
   const [messageList, setMessageList] = useState([]);
   const [summary, setSummary] = useState("");
   const [isSummarizing, setIsSummarizing] = useState(false);
-  const [joined, setJoined] = useState(false);
 
-  // Join Room
-  const joinRoom = () => {
-    if (username !== "" && room !== "") {
-      socket.emit("join_room", room);
-      setJoined(true);
+  // Auto-join room on load
+  useEffect(() => {
+    if (username && room) {
+        socket.emit("join_room", room);
     }
-  };
+  }, [username, room]);
 
-  // Send Message
+  // Send Message (Updated to include senderId)
   const sendMessage = async () => {
     if (currentMessage !== "") {
       const messageData = {
         room: room,
-        sender: username,
+        sender: username,   // For the UI
+        senderId: userId,   // <--- For the Database (REQUIRED)
         content: currentMessage,
         time: new Date(),
       };
 
       await socket.emit("send_message", messageData);
-      // Add our own message to the list immediately
       setMessageList((list) => [...list, messageData]);
       setCurrentMessage("");
     }
@@ -52,112 +57,57 @@ const username = user ? user.username : "";
     };
     socket.on("receive_message", handleReceive);
     return () => socket.off("receive_message", handleReceive);
-  }, [socket]);
+  }, []);
 
-  // Generate AI Summary
+  // AI Summary Logic
   const handleSummarize = async () => {
     setIsSummarizing(true);
+    setSummary(""); // Clear previous summary so Skeleton shows
     try {
       const res = await axios.post(
         "http://localhost:3001/api/summary/generate",
-        {
-          roomId: room,
-        }
+        { roomId: room }
       );
       setSummary(res.data.summary);
     } catch (err) {
       console.error(err);
-      setSummary(
-        "Error generating summary. Make sure you have enough messages!"
-      );
+      setSummary("Error: Could not generate summary. (Check if backend saved messages)");
     }
     setIsSummarizing(false);
   };
 
-  // Basic Styles
-  const containerStyle = {
-    maxWidth: "600px",
-    margin: "2rem auto",
-    fontFamily: "Arial",
-  };
-  const chatBoxStyle = {
-    border: "1px solid #ccc",
-    height: "300px",
-    overflowY: "scroll",
-    padding: "10px",
-    marginBottom: "10px",
-  };
-
-
+  // --- RENDER (Using the New Components) ---
   return (
-    <div style={containerStyle}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <h2>Room: {room}</h2>
-        <button onClick={handleSummarize} disabled={isSummarizing}>
-          {isSummarizing ? "Thinking..." : "✨ AI Summary"}
-        </button>
+    <div style={{ maxWidth: "600px", margin: "2rem auto", fontFamily: "Arial, sans-serif" }}>
+      
+      {/* Header */}
+      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem'}}>
+         <h2 style={{ margin: 0 }}>Room: {room}</h2>
+         <AISummaryButton 
+            onClick={handleSummarize} 
+            isSummarizing={isSummarizing} 
+         />
       </div>
 
-      {summary && (
-        <div
-          style={{
-            background: "#f0f8ff",
-            padding: "10px",
-            borderRadius: "5px",
-            marginBottom: "10px",
-            border: "1px solid #007bff",
-          }}
-        >
-          <strong>AI Summary:</strong> {summary}
-        </div>
-      )}
+      {/* AI Panel (Shows Skeleton when loading) */}
+      <SummaryPanel 
+         summary={summary} 
+         isSummarizing={isSummarizing}
+         onClose={() => setSummary("")}
+      />
 
-      <div style={chatBoxStyle}>
-        {messageList.map((msg, index) => (
-          <div
-            key={index}
-            style={{ textAlign: username === msg.sender ? "right" : "left" }}
-          >
-            <div
-              style={{
-                background: username === msg.sender ? "#007bff" : "#e0e0e0",
-                color: username === msg.sender ? "white" : "black",
-                padding: "5px 10px",
-                borderRadius: "10px",
-                display: "inline-block",
-                margin: "5px",
-              }}
-            >
-              <small style={{ fontSize: "0.7em", display: "block" }}>
-                {msg.sender}
-              </small>
-              {msg.content}
-            </div>
-          </div>
-        ))}
-      </div>
+      {/* Chat Window */}
+      <ChatWindow
+        messageList={messageList}
+        username={username}
+      />
 
-      <div style={{ display: "flex" }}>
-        <input
-          type="text"
-          value={currentMessage}
-          placeholder="Type a message..."
-          style={{ flex: 1, padding: "10px" }}
-          onChange={(event) => setCurrentMessage(event.target.value)}
-          onKeyPress={(e) => {
-            e.key === "Enter" && sendMessage();
-          }}
-        />
-        <button onClick={sendMessage} style={{ padding: "10px 20px" }}>
-          Send
-        </button>
-      </div>
+      {/* Input Area */}
+      <ChatInput
+        currentMessage={currentMessage}
+        setCurrentMessage={setCurrentMessage}
+        sendMessage={sendMessage}
+      />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useContext } from "react";
 import "./App.css";
 import Chat from "./components/Chat";
 import LoginPage from "./components/AuthIdentify/LoginPage.jsx";

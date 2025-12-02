@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const { generateSummery } = require("../controllers/summaryController");
+const { generateSummary } = require("../controllers/summaryController");
 
-//post/api/summery/generate
-router.post("/generate", generateSummery);
+//post/api/summary/generate
+router.post("/generate", generateSummary);
 
 module.exports = router;

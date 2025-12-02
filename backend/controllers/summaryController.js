@@ -6,7 +6,7 @@ const User = require("../models/User");
 const genAI = new GoogleGenerativeAI(process.env.AIzaSyCQWzltRTcAn59x3ugDrh3SivVFeo4tpVU);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-const generateSummery = async (req ,res) => {
+const generateSummary = async (req ,res) => {
   try {
     const { roomId } = req.body;
 
@@ -18,7 +18,7 @@ const generateSummery = async (req ,res) => {
 
     if (userIds.length !== 2) {
       return res.json({
-        summery: "AI Summery currently only works for 1-on-1 chats"
+        summary: "AI Summary currently only works for 1-on-1 chats"
       });
     }
 
@@ -36,7 +36,7 @@ const generateSummery = async (req ,res) => {
       .populate("sender", "username");
 
     if (!message || message.length === 0) {
-      return res.json({ summery: "No message found to summerize." });
+      return res.json({ summary: "No message found to summarize." });
     }
 
     //formatting text for ai
@@ -50,19 +50,19 @@ const generateSummery = async (req ,res) => {
       .join("\n");
     
       //sending to gemini
-      const prompt = `Summerize this chat conversation in 3 short bullet points:\n\n${conversationText}`;
+      const prompt = `Summarize this chat conversation in 3 short bullet points:\n\n${conversationText}`;
 
       const result = await model.generateContent(prompt);
       const response = await result.response;
-      const summeryText = response.text();
+      const summaryText = response.text();
 
-      res.json({ summeryText });
+      res.json({ summaryText });
 
   } catch (error) {
-    console.error("Summery Controller Error:", error);
-    res.status(500).json({ error: "Failed to generate summery" });
+    console.error("Summary Controller Error:", error);
+    res.status(500).json({ error: "Failed to generate summary" });
   }
   
 };
 
-module.exports = { generateSummery };
+module.exports = { generateSummary };

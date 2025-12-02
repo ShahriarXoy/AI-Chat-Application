@@ -6,7 +6,7 @@ const dotenv = require("dotenv");
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const messageRoutes = require("./routes/messageRoutes");
-const summeryRoutes = require("./routes/summaryRoutes");
+const summaryRoutes = require("./routes/summaryRoutes");
 const userRoutes = require("./routes/userRoutes");
 
 dotenv.config();
@@ -38,7 +38,7 @@ app.get("/", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/users", userRoutes);
-app.use("/api/summery", summeryRoutes);
+app.use("/api/summary", summaryRoutes);
 
 // simple in memory online user tracking
 // key: userId, value: number of active sockets

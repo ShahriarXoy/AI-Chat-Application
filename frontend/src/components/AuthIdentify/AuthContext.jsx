@@ -13,7 +13,7 @@ export const AuthProvider = ({ children }) => {
     if (storedUser && token) {
       setUser(JSON.parse(storedUser));
     }
-    setloading(false);
+    setLoading(false);
   }, [token]);
 
   //login function
@@ -21,7 +21,7 @@ export const AuthProvider = ({ children }) => {
     setUser(userData);
     setToken(authToken);
     localStorage.setItem("user", JSON.stringify(userData));
-    loginStorage.setItem("token", authToken);
+    localStorage.setItem("token", authToken);
   };
 
   //logout
