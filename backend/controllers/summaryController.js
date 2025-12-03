@@ -2,11 +2,28 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const Message = require("../models/Message");
 const User = require("../models/User");
 
-//gemini api
-const genAI = new GoogleGenerativeAI(process.env.AIzaSyCQWzltRTcAn59x3ugDrh3SivVFeo4tpVU);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-const generateSummary = async (req ,res) => {
+// --- DEBUGGING START ---
+console.log("------------------------------------------------");
+console.log("DEBUG: Reading API Key from .env...");
+const key = process.env.GEMINI_API_KEY;
+
+if (!key) {
+  console.log("CRITICAL ERROR: Key is UNDEFINED. .env file is not loaded!");
+} else {
+  console.log("DEBUG: Key found. Length:", key.length);
+  console.log("DEBUG: First 5 chars:", key.substring(0, 5));
+  // Don't log the whole key for security, just verify it exists
+}
+console.log("------------------------------------------------");
+// --- DEBUGGING END ---
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+
+const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+
+const generateSummary = async (req, res) => {
   try {
     const { roomId } = req.body;
 
@@ -24,7 +41,7 @@ const generateSummary = async (req ,res) => {
 
     const [user1, user2] = userIds;
 
-    //fetching message between two users
+    // Fetch messages
     const message = await Message.find({
       $or: [
         { sender: user1, receiver: user2 },
@@ -39,8 +56,7 @@ const generateSummary = async (req ,res) => {
       return res.json({ summary: "No message found to summarize." });
     }
 
-    //formatting text for ai
-    //reversing so that ai reads conversation from oldest to newest
+    // Format text
     const conversationText = message
       .reverse()
       .map((msg) => {
@@ -49,20 +65,19 @@ const generateSummary = async (req ,res) => {
       })
       .join("\n");
     
-      //sending to gemini
-      const prompt = `Summarize this chat conversation in 3 short bullet points:\n\n${conversationText}`;
+    // Send to Gemini
+    const prompt = `Summarize this chat conversation in 3 short bullet points:\n\n${conversationText}`;
 
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const summaryText = response.text();
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const summaryText = response.text();
 
-      res.json({ summaryText });
+    res.json({ summary: summaryText });
 
   } catch (error) {
     console.error("Summary Controller Error:", error);
     res.status(500).json({ error: "Failed to generate summary" });
   }
-  
 };
 
 module.exports = { generateSummary };

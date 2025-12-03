@@ -1,17 +1,18 @@
-// controllers/userController.js
 const User = require("../models/User");
 
-// GET /api/users - list all users except the logged in one
-const getUsers = async (req, res) => {
+const getAllUsers = async (req, res) => {
   try {
-    const users = await User.find({ _id: { $ne: req.user._id } }).select(
-      "_id username email"
-    );
-    return res.json(users);
-  } catch (err) {
-    console.error("Get users error:", err.message);
-    return res.status(500).json({ message: "Server error" });
+    // req.user comes from the 'protect' middleware
+    const currentUserId = req.user._id;
+    
+    // Find all users where ID is NOT equal ($ne) to current user
+    const users = await User.find({ _id: { $ne: currentUserId } }).select("-password");
+    
+    res.json(users);
+  } catch (error) {
+    console.error("Error fetching users:", error);
+    res.status(500).json({ message: "Server Error" });
   }
 };
 
-module.exports = { getUsers };
+module.exports = { getAllUsers };

@@ -1,15 +1,18 @@
+const dotenv = require("dotenv");
+dotenv.config();
+
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
-const dotenv = require("dotenv");
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const messageRoutes = require("./routes/messageRoutes");
 const summaryRoutes = require("./routes/summaryRoutes");
 const userRoutes = require("./routes/userRoutes");
+const Message = require("./models/Message");
 
-dotenv.config();
+
 
 const app = express();
 const server = http.createServer(app);
@@ -45,41 +48,49 @@ app.use("/api/summary", summaryRoutes);
 const onlineUsers = {};
 
 // socket.io real time chat
+// Socket.io Real-Time Chat Logic
 io.on("connection", (socket) => {
   console.log("New client connected:", socket.id);
 
-  socket.on("join", ({ userId }) => {
-    if (!userId) return;
-    socket.userId = userId.toString();
-
-    if (!onlineUsers[socket.userId]) {
-      onlineUsers[socket.userId] = 0;
-    }
-    onlineUsers[socket.userId] += 1;
-
-    console.log(`User ${socket.userId} joined. Online:`, onlineUsers);
-    io.emit("online_users", Object.keys(onlineUsers));
+  // 1. Join Room Event
+  socket.on("join_room", (room) => {
+    socket.join(room);
+    console.log(`Socket ${socket.id} joined room: ${room}`);
   });
 
-  socket.on("join_pair", ({ fromUserId, toUserId }) => {
-    if (!fromUserId || !toUserId) return;
-    const roomId = [fromUserId.toString(), toUserId.toString()]
-      .sort()
-      .join("_");
-    socket.join(roomId);
-    console.log(`Socket ${socket.id} joined room ${roomId}`);
+  // 2. Send Message Event
+  socket.on("send_message", async (data) => {
+    // data = { room, sender, senderId, content, time }
+    
+    // A. Send to the other person in the room (Real-time)
+    socket.to(data.room).emit("receive_message", data);
+
+    // B. Save to MongoDB (Persistent)
+    try {
+      // The room ID is format: "User1ID_User2ID"
+      // We know the senderId. The "Receiver" is the other ID in the room string.
+      const userIds = data.room.split("_");
+      
+      // Filter out the sender to find the receiver
+      const receiverId = userIds.find(id => id !== data.senderId);
+
+      if (receiverId) {
+        const newMessage = new Message({
+          sender: data.senderId,
+          receiver: receiverId,
+          content: data.content,
+        });
+
+        await newMessage.save();
+        console.log("Message saved to Database!");
+      }
+    } catch (err) {
+      console.error("Error saving message:", err);
+    }
   });
 
   socket.on("disconnect", () => {
     console.log("Client disconnected:", socket.id);
-    const userId = socket.userId;
-    if (userId && onlineUsers[userId]) {
-      onlineUsers[userId] -= 1;
-      if (onlineUsers[userId] <= 0) {
-        delete onlineUsers[userId];
-      }
-      io.emit("online_users", Object.keys(onlineUsers));
-    }
   });
 });
 

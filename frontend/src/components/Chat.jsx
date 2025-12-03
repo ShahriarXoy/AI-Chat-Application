@@ -1,45 +1,57 @@
 import React, { useEffect, useState, useContext } from "react";
 import io from "socket.io-client";
 import axios from "axios";
-
-// 1. Import AuthContext
 import { AuthContext } from "./AuthIdentify/AuthContext";
 
-// 2. Import your PRO components
 import ChatInput from "./Inputs & Rich Content/ChatInput";
 import ChatWindow from "./Chat Display/ChatWindow";
 import AISummaryButton from "./AI Feature/AISummaryButton";
 import SummaryPanel from "./AI Feature/SummaryPanel";
+import ChatList from "./Sidebar & Navigation/ChatList"; // <--- Import the list
 
-// Connect to backend
 const socket = io.connect("http://localhost:3001");
 
 function Chat() {
-  // Get User Data from Context
   const { user } = useContext(AuthContext);
-  const username = user ? user.username : "Guest";
-  const userId = user ? user._id : null; // <--- Critical for Database Saving!
+  const myUsername = user ? user.username : "Guest";
+  const myId = user ? user._id : null;
 
-  const [room, setRoom] = useState("general");
+  // State for 1-on-1
+  const [selectedUser, setSelectedUser] = useState(null); // Who are we talking to?
+  const [room, setRoom] = useState("general");          // Current Room ID
+  
   const [currentMessage, setCurrentMessage] = useState("");
   const [messageList, setMessageList] = useState([]);
   const [summary, setSummary] = useState("");
   const [isSummarizing, setIsSummarizing] = useState(false);
 
-  // Auto-join room on load
-  useEffect(() => {
-    if (username && room) {
-        socket.emit("join_room", room);
-    }
-  }, [username, room]);
+  // Logic: When you click a user in the list
+  const handleUserSelect = (otherUser) => {
+    setSelectedUser(otherUser);
+    
+    // Create a unique room ID: "MyID_TheirID" (Sorted alphabetically so it's always the same for both people)
+    // Example: "123_456" is the same as "456_123" if we sort them.
+    const newRoomId = [myId, otherUser._id].sort().join("_");
+    
+    setRoom(newRoomId);
+    setMessageList([]); // Clear screen for new chat
+    setSummary("");     // Clear old summary
+  };
 
-  // Send Message (Updated to include senderId)
+  // Join the room whenever 'room' changes
+  useEffect(() => {
+    if (myUsername && room) {
+        socket.emit("join_room", room);
+        console.log(`Joined room: ${room}`);
+    }
+  }, [myUsername, room]);
+
   const sendMessage = async () => {
     if (currentMessage !== "") {
       const messageData = {
         room: room,
-        sender: username,   // For the UI
-        senderId: userId,   // <--- For the Database (REQUIRED)
+        sender: myUsername,
+        senderId: myId,
         content: currentMessage,
         time: new Date(),
       };
@@ -50,64 +62,71 @@ function Chat() {
     }
   };
 
-  // Receive Messages
   useEffect(() => {
     const handleReceive = (data) => {
-      setMessageList((list) => [...list, data]);
+      // Only add message if it belongs to the current room!
+      if (data.room === room) { 
+        setMessageList((list) => [...list, data]);
+      }
     };
     socket.on("receive_message", handleReceive);
     return () => socket.off("receive_message", handleReceive);
-  }, []);
+  }, [socket, room]); // Re-run this listener when room changes
 
-  // AI Summary Logic
+  // ... (Keep handleSummarize logic the same) ...
   const handleSummarize = async () => {
     setIsSummarizing(true);
-    setSummary(""); // Clear previous summary so Skeleton shows
+    setSummary("");
     try {
-      const res = await axios.post(
-        "http://localhost:3001/api/summary/generate",
-        { roomId: room }
-      );
+      const res = await axios.post("http://localhost:3001/api/summary/generate", { roomId: room });
       setSummary(res.data.summary);
     } catch (err) {
       console.error(err);
-      setSummary("Error: Could not generate summary. (Check if backend saved messages)");
+      setSummary("Error generating summary.");
     }
     setIsSummarizing(false);
   };
 
-  // --- RENDER (Using the New Components) ---
+  // --- RENDER ---
   return (
-    <div style={{ maxWidth: "600px", margin: "2rem auto", fontFamily: "Arial, sans-serif" }}>
+    <div style={{ display: "flex", height: "90vh", fontFamily: "Arial, sans-serif" }}>
       
-      {/* Header */}
-      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem'}}>
-         <h2 style={{ margin: 0 }}>Room: {room}</h2>
-         <AISummaryButton 
-            onClick={handleSummarize} 
-            isSummarizing={isSummarizing} 
-         />
+      {/* LEFT SIDEBAR */}
+      <div style={{ width: "300px", borderRight: "1px solid #ccc", background: "#fff" }}>
+        <div style={{ padding: "20px", borderBottom: "1px solid #eee", fontWeight: "bold" }}>
+          <h3>Chats</h3>
+          <small>Logged in as: {myUsername}</small>
+        </div>
+        <ChatList onSelectUser={handleUserSelect} />
       </div>
 
-      {/* AI Panel (Shows Skeleton when loading) */}
-      <SummaryPanel 
-         summary={summary} 
-         isSummarizing={isSummarizing}
-         onClose={() => setSummary("")}
-      />
+      {/* RIGHT CHAT AREA */}
+      <div style={{ flex: 1, padding: "20px", display: "flex", flexDirection: "column" }}>
+        {selectedUser ? (
+          <>
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "20px" }}>
+              <h2>Chat with {selectedUser.username}</h2>
+              <AISummaryButton onClick={handleSummarize} isSummarizing={isSummarizing} />
+            </div>
 
-      {/* Chat Window */}
-      <ChatWindow
-        messageList={messageList}
-        username={username}
-      />
+            <SummaryPanel summary={summary} isSummarizing={isSummarizing} onClose={() => setSummary("")} />
 
-      {/* Input Area */}
-      <ChatInput
-        currentMessage={currentMessage}
-        setCurrentMessage={setCurrentMessage}
-        sendMessage={sendMessage}
-      />
+            <ChatWindow messageList={messageList} username={myUsername} />
+
+            <ChatInput 
+              currentMessage={currentMessage} 
+              setCurrentMessage={setCurrentMessage} 
+              sendMessage={sendMessage} 
+            />
+          </>
+        ) : (
+          <div style={{ margin: "auto", textAlign: "center", color: "#888" }}>
+            <h2>Welcome, {myUsername}! 👋</h2>
+            <p>Select a user from the left to start chatting.</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
