@@ -1,121 +1,42 @@
-const Chat = require("../models/Chat");
-const User = require("../models/User");
+const Message = require("../models/Message");
 
-// Helper to build room id for two users
-const getRoomId = (userId1, userId2) => {
-  const a = userId1.toString();
-  const b = userId2.toString();
-  return [a, b].sort().join("_");
-};
-
-// POST /api/messages
-// body: { receiverId, content }
-const sendMessage = async (req, res) => {
+// @desc    Get messages between two users
+// @route   GET /api/messages/:roomId
+const getMessages = async (req, res) => {
   try {
-    const { receiverId, content } = req.body;
+    const { roomId } = req.params;
 
-    if (!receiverId || !content) {
-      return res
-        .status(400)
-        .json({ message: "receiverId and content are required" });
+    // If it's the general room, we might not have history logic yet, 
+    // or we return empty array
+    if (roomId === "general") {
+      return res.json([]);
     }
 
-    const receiver = await User.findById(receiverId);
-    if (!receiver) {
-      return res.status(404).json({ message: "Receiver not found" });
+    // Logic: The room ID is "User1_User2". We split it to find the participants.
+    const userIds = roomId.split("_");
+    
+    // Safety check: Ensure it's a valid pair
+    if (userIds.length !== 2) {
+      return res.status(400).json({ message: "Invalid Room ID" });
     }
 
-    const chat = await Chat.create({
-      sender: req.user._id,
-      receiver: receiverId,
-      content,
-      status: "sent",
-    });
+    const [user1, user2] = userIds;
 
-    const io = req.app.get("io");
-    if (io) {
-      const roomId = getRoomId(req.user._id, receiverId);
-      io.to(roomId).emit("new_message", {
-        _id: chat._id,
-        sender: chat.sender,
-        receiver: chat.receiver,
-        content: chat.content,
-        status: chat.status,
-        createdAt: chat.createdAt,
-      });
-    }
-
-    return res.status(201).json(chat);
-  } catch (err) {
-    console.error("Send message error:", err.message);
-    return res.status(500).json({ message: "Server error" });
-  }
-};
-
-// GET /api/messages/:userId
-// full conversation between logged in user and :userId
-const getConversation = async (req, res) => {
-  try {
-    const otherUserId = req.params.userId;
-
-    const messages = await Chat.find({
+    // Find messages where:
+    // (Sender is User1 AND Receiver is User2) OR (Sender is User2 AND Receiver is User1)
+    const messages = await Message.find({
       $or: [
-        { sender: req.user._id, receiver: otherUserId },
-        { sender: otherUserId, receiver: req.user._id },
+        { sender: user1, receiver: user2 },
+        { sender: user2, receiver: user1 },
       ],
     })
-      .populate("sender", "username email")
-      .populate("receiver", "username email")
-      .sort({ createdAt: 1 });
+    .sort({ createdAt: 1 }); // 1 = Oldest to Newest (Chronological order)
 
-    return res.json(messages);
-  } catch (err) {
-    console.error("Get conversation error:", err.message);
-    return res.status(500).json({ message: "Server error" });
+    res.json(messages);
+  } catch (error) {
+    console.error("Error fetching messages:", error);
+    res.status(500).json({ message: "Server Error" });
   }
 };
 
-// GET /api/messages
-// inbox: last message per conversation partner
-const getInbox = async (req, res) => {
-  try {
-    const messages = await Chat.find({
-      $or: [{ sender: req.user._id }, { receiver: req.user._id }],
-    })
-      .sort({ createdAt: -1 })
-      .populate("sender", "username email")
-      .populate("receiver", "username email");
-
-    const seen = new Set();
-    const inbox = [];
-
-    for (const msg of messages) {
-      const other =
-        msg.sender._id.toString() === req.user._id.toString()
-          ? msg.receiver
-          : msg.sender;
-
-      if (!other) continue;
-
-      const otherId = other._id.toString();
-      if (!seen.has(otherId)) {
-        seen.add(otherId);
-        inbox.push({
-          withUser: other,
-          lastMessage: msg,
-        });
-      }
-    }
-
-    return res.json(inbox);
-  } catch (err) {
-    console.error("Get inbox error:", err.message);
-    return res.status(500).json({ message: "Server error" });
-  }
-};
-
-module.exports = {
-  sendMessage,
-  getConversation,
-  getInbox,
-};
+module.exports = { getMessages };

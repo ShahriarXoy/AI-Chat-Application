@@ -7,8 +7,9 @@ import ChatInput from "./Inputs & Rich Content/ChatInput";
 import ChatWindow from "./Chat Display/ChatWindow";
 import AISummaryButton from "./AI Feature/AISummaryButton";
 import SummaryPanel from "./AI Feature/SummaryPanel";
-import ChatList from "./Sidebar & Navigation/ChatList"; // <--- Import the list
+import ChatList from "./Sidebar & Navigation/ChatList";
 
+// Connect to backend
 const socket = io.connect("http://localhost:3001");
 
 function Chat() {
@@ -16,36 +17,58 @@ function Chat() {
   const myUsername = user ? user.username : "Guest";
   const myId = user ? user._id : null;
 
-  // State for 1-on-1
-  const [selectedUser, setSelectedUser] = useState(null); // Who are we talking to?
-  const [room, setRoom] = useState("general");          // Current Room ID
+  // State
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [room, setRoom] = useState("general");
   
   const [currentMessage, setCurrentMessage] = useState("");
   const [messageList, setMessageList] = useState([]);
   const [summary, setSummary] = useState("");
   const [isSummarizing, setIsSummarizing] = useState(false);
 
-  // Logic: When you click a user in the list
+  // --- NEW: Fetch Chat History when room changes ---
+  useEffect(() => {
+    const fetchMessages = async () => {
+      // Don't fetch for "general" or invalid rooms
+      if (!room || room === "general") return;
+
+      try {
+        const token = localStorage.getItem("token");
+        const res = await axios.get(`http://localhost:3001/api/messages/${room}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        // Load history into the chat window
+        setMessageList(res.data);
+      } catch (err) {
+        console.error("Error fetching history:", err);
+      }
+    };
+
+    fetchMessages();
+  }, [room]); // <--- Runs whenever 'room' changes
+
+
+  // Handle User Selection from Sidebar
   const handleUserSelect = (otherUser) => {
     setSelectedUser(otherUser);
     
-    // Create a unique room ID: "MyID_TheirID" (Sorted alphabetically so it's always the same for both people)
-    // Example: "123_456" is the same as "456_123" if we sort them.
+    // Create consistent Room ID (Alphabetically sorted IDs)
     const newRoomId = [myId, otherUser._id].sort().join("_");
     
     setRoom(newRoomId);
-    setMessageList([]); // Clear screen for new chat
+    setMessageList([]); // Clear screen immediately while loading new chat
     setSummary("");     // Clear old summary
   };
 
-  // Join the room whenever 'room' changes
+  // Socket: Join Room
   useEffect(() => {
     if (myUsername && room) {
         socket.emit("join_room", room);
-        console.log(`Joined room: ${room}`);
     }
   }, [myUsername, room]);
 
+  // Socket: Send Message
   const sendMessage = async () => {
     if (currentMessage !== "") {
       const messageData = {
@@ -56,24 +79,28 @@ function Chat() {
         time: new Date(),
       };
 
+      // Send to Socket (Real-time)
       await socket.emit("send_message", messageData);
+      
+      // Update UI immediately
       setMessageList((list) => [...list, messageData]);
       setCurrentMessage("");
     }
   };
 
+  // Socket: Receive Message
   useEffect(() => {
     const handleReceive = (data) => {
-      // Only add message if it belongs to the current room!
+      // Only show message if it belongs to the active room
       if (data.room === room) { 
         setMessageList((list) => [...list, data]);
       }
     };
     socket.on("receive_message", handleReceive);
     return () => socket.off("receive_message", handleReceive);
-  }, [socket, room]); // Re-run this listener when room changes
+  }, [socket, room]);
 
-  // ... (Keep handleSummarize logic the same) ...
+  // AI Summary Logic
   const handleSummarize = async () => {
     setIsSummarizing(true);
     setSummary("");
@@ -82,7 +109,7 @@ function Chat() {
       setSummary(res.data.summary);
     } catch (err) {
       console.error(err);
-      setSummary("Error generating summary.");
+      setSummary("Error generating summary. (Check backend logs)");
     }
     setIsSummarizing(false);
   };
@@ -94,8 +121,9 @@ function Chat() {
       {/* LEFT SIDEBAR */}
       <div style={{ width: "300px", borderRight: "1px solid #ccc", background: "#fff" }}>
         <div style={{ padding: "20px", borderBottom: "1px solid #eee", fontWeight: "bold" }}>
-          <h3>Chats</h3>
-          <small>Logged in as: {myUsername}</small>
+          <h3 style={{ color: "black", margin: "0 0 5px 0" }}>Chats</h3>
+          
+          <small style={{ color: "#555" }}>Logged in as: {myUsername}</small>
         </div>
         <ChatList onSelectUser={handleUserSelect} />
       </div>
@@ -112,7 +140,11 @@ function Chat() {
 
             <SummaryPanel summary={summary} isSummarizing={isSummarizing} onClose={() => setSummary("")} />
 
-            <ChatWindow messageList={messageList} username={myUsername} />
+            <ChatWindow
+              messageList={messageList}
+              username={myUsername}
+              currentUserId={myId}
+             />
 
             <ChatInput 
               currentMessage={currentMessage} 
