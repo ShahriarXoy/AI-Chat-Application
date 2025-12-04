@@ -1,7 +1,7 @@
 import React from "react";
 import MessageList from "./MessageList";
 
-function ChatWindow({ messageList, username }) {
+function ChatWindow({ messageList, username, currentUserId }) {
   const chatBoxStyle = {
     border: "1px solid #ccc",
     height: "400px",
@@ -14,7 +14,11 @@ function ChatWindow({ messageList, username }) {
 
   return (
     <div style={chatBoxStyle}>
-      <MessageList messageList={messageList} username={username} />
+      <MessageList
+        messageList={messageList}
+        username={username}
+        currentUserId={currentUserId}
+      />
     </div>
   );
 }

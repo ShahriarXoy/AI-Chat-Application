@@ -1,8 +1,7 @@
 import React from "react";
 import MessageBubble from "./MessageBubble";
 
-function MessageList({ messageList, username }) {
-  // Safety check: if the list is broken, show nothing
+function MessageList({ messageList, username, currentUserId }) {
   if (!messageList || messageList.length === 0) {
     return (
       <p style={{ textAlign: "center", color: "#888", marginTop: "20px" }}>
@@ -14,10 +13,18 @@ function MessageList({ messageList, username }) {
   return (
     <div>
       {messageList.map((msg, index) => {
-        // Safety check: Skip empty messages
         if (!msg) return null;
 
-        const isOwnMessage = msg.sender === username;
+        // THE FIX: Check both ID (Database) and Name (Live)
+        // 1. msg.sender === currentUserId (For database messages where sender is an ID)
+        // 2. msg.senderId === currentUserId (For live messages which have a senderId field)
+        // 3. msg.sender === username (Fallback for old logic)
+        
+        const isOwnMessage = 
+          msg.sender === currentUserId || 
+          msg.senderId === currentUserId || 
+          msg.sender === username;
+
         return (
           <MessageBubble 
             key={index} 
