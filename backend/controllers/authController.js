@@ -40,33 +40,22 @@ const loginUser = async (req, res) => {
   try {
     const { emailOrUsername, password } = req.body;
 
-    console.log("1. Login attempt for:", emailOrUsername); // <--- DEBUG LOG
-
     if (!emailOrUsername || !password) {
       return res.status(400).json({ message: "Please provide email/username and password" });
     }
 
-    //find user
     const user = await User.findOne({
       $or: [{ email: emailOrUsername }, { username: emailOrUsername }],
     });
 
     if (!user) {
-      console.log("2. User not found in DB");
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    console.log("3. User found. Verifying password..."); // <--- DEBUG LOG
-
-    //check password
     const isMatch = await user.matchPassword(password);
-
     if (!isMatch) {
-      console.log("4. Password did not match"); // <--- DEBUG LOG
       return res.status(401).json({ message: "Invalid credentials" });
     }
-
-    console.log("5. Success! Sending token."); // <--- DEBUG LOG
 
     return res.json({
       _id: user._id,
@@ -75,7 +64,7 @@ const loginUser = async (req, res) => {
       token: generateToken(user._id),
     });
   } catch (err) {
-    console.error("Login CRASH error:", err);
+    console.error("Login error:", err.message);
     return res.status(500).json({ message: "Server error" });
   }
 };
