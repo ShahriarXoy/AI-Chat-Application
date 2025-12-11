@@ -22,6 +22,11 @@ const userSchema = new mongoose.Schema(
       required: true,
       minlength: 6,
     },
+    // 🔵 NEW: last seen timestamp, null until user has gone offline at least once
+    lastSeen: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );
