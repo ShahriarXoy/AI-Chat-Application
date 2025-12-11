@@ -12,6 +12,8 @@ const summaryRoutes = require("./routes/summaryRoutes");
 const userRoutes = require("./routes/userRoutes");
 const Message = require("./models/Message");
 
+
+
 const app = express();
 const server = http.createServer(app);
 
@@ -44,47 +46,11 @@ app.use("/api/summary", summaryRoutes);
 // simple in memory online user tracking
 // key: userId, value: number of active sockets
 const onlineUsers = {};
-// map socket.id -> userId to clean up on disconnect
-const socketToUser = {};
 
 // socket.io real time chat
 // Socket.io Real-Time Chat Logic
 io.on("connection", (socket) => {
   console.log("New client connected:", socket.id);
-
-  // when frontend identifies which user this socket belongs to
-  socket.on("user_online", (userId) => {
-    if (!userId) return;
-
-    socketToUser[socket.id] = userId;
-
-    if (!onlineUsers[userId]) {
-      onlineUsers[userId] = 0;
-    }
-    onlineUsers[userId] += 1;
-
-    console.log("User online:", userId, "count:", onlineUsers[userId]);
-
-    // broadcast updated online user list (array of userIds)
-    io.emit("online_users", Object.keys(onlineUsers));
-  });
-
-  // optional event if you manually emit on logout from frontend
-  socket.on("user_offline", () => {
-    const userId = socketToUser[socket.id];
-    if (!userId) return;
-
-    if (onlineUsers[userId]) {
-      onlineUsers[userId] -= 1;
-      if (onlineUsers[userId] <= 0) {
-        delete onlineUsers[userId];
-      }
-    }
-    delete socketToUser[socket.id];
-
-    console.log("User offline:", userId);
-    io.emit("online_users", Object.keys(onlineUsers));
-  });
 
   // 1. Join Room Event
   socket.on("join_room", (room) => {
@@ -95,7 +61,7 @@ io.on("connection", (socket) => {
   // 2. Send Message Event
   socket.on("send_message", async (data) => {
     // data = { room, sender, senderId, content, time }
-
+    
     // A. Send to the other person in the room (Real-time)
     socket.to(data.room).emit("receive_message", data);
 
@@ -104,9 +70,9 @@ io.on("connection", (socket) => {
       // The room ID is format: "User1ID_User2ID"
       // We know the senderId. The "Receiver" is the other ID in the room string.
       const userIds = data.room.split("_");
-
+      
       // Filter out the sender to find the receiver
-      const receiverId = userIds.find((id) => id !== data.senderId);
+      const receiverId = userIds.find(id => id !== data.senderId);
 
       if (receiverId) {
         const newMessage = new Message({
@@ -125,19 +91,6 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     console.log("Client disconnected:", socket.id);
-
-    const userId = socketToUser[socket.id];
-    if (userId) {
-      if (onlineUsers[userId]) {
-        onlineUsers[userId] -= 1;
-        if (onlineUsers[userId] <= 0) {
-          delete onlineUsers[userId];
-        }
-      }
-      delete socketToUser[socket.id];
-
-      io.emit("online_users", Object.keys(onlineUsers));
-    }
   });
 });
 
