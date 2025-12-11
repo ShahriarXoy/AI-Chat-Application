@@ -17,6 +17,12 @@ const messageSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    group: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Group",
+      default: null,
+    },
+
     // optional: delivered / seen flags
     delivered: {
       type: Boolean,
