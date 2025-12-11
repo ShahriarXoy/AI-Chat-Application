@@ -10,6 +10,7 @@ const authRoutes = require("./routes/authRoutes");
 const messageRoutes = require("./routes/messageRoutes");
 const summaryRoutes = require("./routes/summaryRoutes");
 const userRoutes = require("./routes/userRoutes");
+const groupRoutes = require("./routes/groupRoutes"); // ✅ NEW
 const Message = require("./models/Message");
 
 const app = express();
@@ -40,6 +41,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/summary", summaryRoutes);
+app.use("/api/groups", groupRoutes); // ✅ NEW
 
 // simple in memory online user tracking
 // key: userId, value: number of active sockets
@@ -48,11 +50,10 @@ const onlineUsers = {};
 const socketToUser = {};
 
 // socket.io real time chat
-// Socket.io Real-Time Chat Logic
 io.on("connection", (socket) => {
   console.log("New client connected:", socket.id);
 
-  // when frontend identifies which user this socket belongs to
+  // identify which user is online
   socket.on("user_online", (userId) => {
     if (!userId) return;
 
@@ -65,11 +66,10 @@ io.on("connection", (socket) => {
 
     console.log("User online:", userId, "count:", onlineUsers[userId]);
 
-    // broadcast updated online user list (array of userIds)
     io.emit("online_users", Object.keys(onlineUsers));
   });
 
-  // optional event if you manually emit on logout from frontend
+  // optional manual offline on logout
   socket.on("user_offline", () => {
     const userId = socketToUser[socket.id];
     if (!userId) return;
@@ -86,13 +86,47 @@ io.on("connection", (socket) => {
     io.emit("online_users", Object.keys(onlineUsers));
   });
 
-  // 1. Join Room Event
+  // ✅ GROUP CHAT: join a group room
+  // data: groupId
+  socket.on("join_group", (groupId) => {
+    if (!groupId) return;
+    const roomName = `group_${groupId}`;
+    socket.join(roomName);
+    console.log(`Socket ${socket.id} joined group room: ${roomName}`);
+  });
+
+  // ✅ GROUP CHAT: send group message
+  // data = { groupId, senderId, senderName?, content, time? }
+  socket.on("send_group_message", async (data) => {
+    if (!data?.groupId || !data?.senderId || !data?.content) return;
+
+    const roomName = `group_${data.groupId}`;
+
+    // A. Broadcast to everyone in group room
+    io.to(roomName).emit("receive_group_message", data);
+
+    // B. Save to DB as group message
+    try {
+      const newMessage = new Message({
+        sender: data.senderId,
+        content: data.content,
+        group: data.groupId, // ✅ NEW field
+      });
+
+      await newMessage.save();
+      console.log("Group message saved to Database!");
+    } catch (err) {
+      console.error("Error saving group message:", err);
+    }
+  });
+
+  // 1-to-1 chat: Join Room Event (unchanged)
   socket.on("join_room", (room) => {
     socket.join(room);
     console.log(`Socket ${socket.id} joined room: ${room}`);
   });
 
-  // 2. Send Message Event
+  // 1-to-1 chat: Send Message Event (unchanged)
   socket.on("send_message", async (data) => {
     // data = { room, sender, senderId, content, time }
 
@@ -102,10 +136,7 @@ io.on("connection", (socket) => {
     // B. Save to MongoDB (Persistent)
     try {
       // The room ID is format: "User1ID_User2ID"
-      // We know the senderId. The "Receiver" is the other ID in the room string.
       const userIds = data.room.split("_");
-
-      // Filter out the sender to find the receiver
       const receiverId = userIds.find((id) => id !== data.senderId);
 
       if (receiverId) {
