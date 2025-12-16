@@ -27,7 +27,12 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
-    // 🔵 NEW: last seen timestamp, null until user has gone offline at least once
+    // 🔵 NEW: Track if they used Google Login
+    isGoogleUser: {
+      type: Boolean,
+      default: false,
+    },
+    // 🔵 NEW: last seen timestamp
     lastSeen: {
       type: Date,
       default: null,
@@ -48,6 +53,6 @@ userSchema.methods.matchPassword = async function (enteredPassword) {
   return bcrypt.compare(enteredPassword, this.password);
 };
 
-const User = mongoose.model("User", userSchema); // collection: 'users'
+const User = mongoose.model("User", userSchema);
 
 module.exports = User;
