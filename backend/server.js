@@ -10,9 +10,8 @@ const authRoutes = require("./routes/authRoutes");
 const messageRoutes = require("./routes/messageRoutes");
 const summaryRoutes = require("./routes/summaryRoutes");
 const userRoutes = require("./routes/userRoutes");
-const groupRoutes = require("./routes/groupRoutes"); // ✅ NEW
+const groupRoutes = require("./routes/groupRoutes");
 const Message = require("./models/Message");
-
 
 const app = express();
 const server = http.createServer(app);
@@ -30,7 +29,6 @@ connectDB();
 
 // middleware
 app.use(cors());
-// ✅ Increase payload limit for image uploads (default is 100kb, images are much larger)
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
@@ -44,19 +42,15 @@ app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/summary", summaryRoutes);
-app.use("/api/groups", groupRoutes); // ✅ NEW
+app.use("/api/groups", groupRoutes);
 
 // simple in memory online user tracking
-// key: userId, value: number of active sockets
 const onlineUsers = {};
-// map socket.id -> userId to clean up on disconnect
 const socketToUser = {};
 
-// socket.io real time chat
 io.on("connection", (socket) => {
   console.log("New client connected:", socket.id);
 
-  // identify which user is online
   socket.on("user_online", (userId) => {
     if (!userId) return;
 
@@ -68,11 +62,9 @@ io.on("connection", (socket) => {
     onlineUsers[userId] += 1;
 
     console.log("User online:", userId, "count:", onlineUsers[userId]);
-
     io.emit("online_users", Object.keys(onlineUsers));
   });
 
-  // optional manual offline on logout
   socket.on("user_offline", () => {
     const userId = socketToUser[socket.id];
     if (!userId) return;
@@ -89,8 +81,7 @@ io.on("connection", (socket) => {
     io.emit("online_users", Object.keys(onlineUsers));
   });
 
-  // ✅ GROUP CHAT: join a group room
-  // data: groupId
+  // GROUP CHAT: join a group room
   socket.on("join_group", (groupId) => {
     if (!groupId) return;
     const roomName = `group_${groupId}`;
@@ -98,62 +89,123 @@ io.on("connection", (socket) => {
     console.log(`Socket ${socket.id} joined group room: ${roomName}`);
   });
 
-  // ✅ GROUP CHAT: send group message
-  // data = { groupId, senderId, senderName?, content, time? }
-  socket.on("send_group_message", async (data) => {
-    if (!data?.groupId || !data?.senderId || !data?.content) return;
+  // GROUP CHAT: send group message
+  socket.on("send_group_message", async (data, ack) => {
+    if (!data?.groupId || !data?.senderId || !data?.content) {
+      if (typeof ack === "function") ack({ ok: false, error: "invalid_payload" });
+      return;
+    }
 
     const roomName = `group_${data.groupId}`;
 
-    // A. Broadcast to everyone in group room
-    io.to(roomName).emit("receive_group_message", data);
+    // Broadcast
+    io.to(roomName).emit("receive_group_message", {
+      ...data,
+      delivered: true,
+      status: "delivered",
+      seen: false,
+    });
 
-    // B. Save to DB as group message
+    // Save
     try {
       const newMessage = new Message({
         sender: data.senderId,
         content: data.content,
-        group: data.groupId, // ✅ NEW field
+        group: data.groupId,
+        delivered: true,
+        seen: false,
+        status: "delivered",
       });
 
-      await newMessage.save();
+      const saved = await newMessage.save();
       console.log("Group message saved to Database!");
+
+      if (typeof ack === "function") ack({ ok: true, messageId: saved?._id?.toString() });
     } catch (err) {
       console.error("Error saving group message:", err);
+      if (typeof ack === "function") ack({ ok: false, error: "db_save_failed" });
     }
   });
 
-  // 1-to-1 chat: Join Room Event (unchanged)
+  // 1-to-1 chat: Join Room
   socket.on("join_room", (room) => {
     socket.join(room);
     console.log(`Socket ${socket.id} joined room: ${room}`);
   });
 
-  // 1-to-1 chat: Send Message Event (unchanged)
-  socket.on("send_message", async (data) => {
-    // data = { room, sender, senderId, content, time }
+  // 1-to-1 chat: Send Message (UPDATED with ACK + delivered)
+  socket.on("send_message", async (data, ack) => {
+    if (!data?.room || !data?.senderId || !data?.content) {
+      if (typeof ack === "function") ack({ ok: false, error: "invalid_payload" });
+      return;
+    }
 
-    // A. Send to the other person in the room (Real-time)
-    socket.to(data.room).emit("receive_message", data);
+    // Determine receiverId from room
+    const userIds = data.room.split("_");
+    const receiverId = userIds.find((id) => id !== String(data.senderId));
 
-    // B. Save to MongoDB (Persistent)
+    // Payload to receiver
+    const payloadToReceiver = {
+      ...data,
+      receiverId: receiverId || data.receiverId,
+      delivered: true,
+      status: "delivered",
+      seen: false,
+    };
+
+    // A. Send to receiver
+    socket.to(data.room).emit("receive_message", payloadToReceiver);
+
+    // B. Save to DB
     try {
-      // The room ID is format: "User1ID_User2ID"
-      const userIds = data.room.split("_");
-      const receiverId = userIds.find((id) => id !== data.senderId);
+      let savedId = null;
 
       if (receiverId) {
         const newMessage = new Message({
           sender: data.senderId,
           receiver: receiverId,
           content: data.content,
+          delivered: true,
+          seen: false,
+          status: "delivered",
+          room: data.room,
+          time: data.time,
         });
 
-        await newMessage.save();
+        const saved = await newMessage.save();
+        savedId = saved?._id?.toString();
         console.log("Message saved to Database!");
+      }
+
+      // C. ACK back to sender
+      if (typeof ack === "function") {
+        ack({ ok: true, messageId: savedId });
       }
     } catch (err) {
       console.error("Error saving message:", err);
+      if (typeof ack === "function") ack({ ok: false, error: "db_save_failed" });
+    }
+  });
+
+  // Seen event (receiver opened the chat)
+  socket.on("messages_seen", async ({ room, viewerId }) => {
+    if (!room || !viewerId) return;
+
+    const userIds = room.split("_");
+    const otherId = userIds.find((id) => id !== String(viewerId));
+    if (!otherId) return;
+
+    try {
+      // Update DB: messages from otherId -> viewerId set seen=true
+      await Message.updateMany(
+        { sender: otherId, receiver: viewerId, seen: { $ne: true } },
+        { $set: { seen: true, status: "seen" } }
+      );
+
+      // Notify both clients in that room
+      io.to(room).emit("messages_seen_update", { room, viewerId });
+    } catch (err) {
+      console.error("Error marking messages seen:", err);
     }
   });
 

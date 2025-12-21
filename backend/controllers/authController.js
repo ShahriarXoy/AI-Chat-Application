@@ -18,9 +18,7 @@ const registerUser = async (req, res) => {
 
     const userExists = await User.findOne({ $or: [{ email }, { username }] });
     if (userExists) {
-      return res
-        .status(400)
-        .json({ message: "User already exists with that email or username" });
+      return res.status(400).json({ message: "User already exists with that email or username" });
     }
 
     const user = await User.create({ username, email, password });
@@ -45,9 +43,7 @@ const loginUser = async (req, res) => {
     console.log("1. Login attempt for:", emailOrUsername); // <--- DEBUG LOG
 
     if (!emailOrUsername || !password) {
-      return res
-        .status(400)
-        .json({ message: "Please provide email/username and password" });
+      return res.status(400).json({ message: "Please provide email/username and password" });
     }
 
     //find user
@@ -89,48 +85,8 @@ const getMe = async (req, res) => {
   return res.json(req.user);
 };
 
-// NEW: Handle Google Login
-const googleLogin = async (req, res) => {
-  const { email, name, profilePicture, googleId } = req.body;
-
-  try {
-    // 1. Check if user exists
-    let user = await User.findOne({ email });
-
-    // 2. If not, create them
-    if (!user) {
-      // Create a username from the email (e.g., "joy" from "joy@gmail.com")
-      const baseUsername = email.split("@")[0];
-      const randomSuffix = Math.floor(1000 + Math.random() * 9000); // Unique suffix
-
-      user = await User.create({
-        username: `${baseUsername}${randomSuffix}`,
-        email,
-        password: googleId, // Use Google ID as a dummy password (or leave empty if schema allows)
-        profilePicture,
-        isGoogleUser: true, // Optional flag
-      });
-    }
-
-    // 3. Generate Token (Reuse your existing generateToken function)
-    const token = generateToken(user._id);
-
-    // 4. Send back the same response structure as your normal login
-    res.json({
-      _id: user._id,
-      username: user.username,
-      email: user.email,
-      profilePicture: user.profilePicture,
-      token: token,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Google Login Failed" });
-  }
-};
-
 module.exports = {
   registerUser,
-  authUser: loginUser, // <--- MAP loginUser TO authUser
-  googleLogin,
+  loginUser,
+  getMe,
 };

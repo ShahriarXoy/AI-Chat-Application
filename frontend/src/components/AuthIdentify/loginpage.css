@@ -1,0 +1,6 @@
+.container .icon{
+  width: 30px;
+  height: 30px;
+  object-fit:contain;
+  margin-right: 10px;
+}

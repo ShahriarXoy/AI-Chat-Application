@@ -1,14 +1,11 @@
 const express = require("express");
-const router = express.Router();
-const {
-  registerUser,
-  authUser,
-  googleLogin,
-} = require("../controllers/authController");
+const { registerUser, loginUser, getMe } = require("../controllers/authController");
+const { protect } = require("../middleware/authMiddleware");
 
-// Define the API endpoints
+const router = express.Router();
+
 router.post("/register", registerUser);
-router.post("/login", authUser);
-router.post("/google", googleLogin); // <--- This handles the synced data
+router.post("/login", loginUser);
+router.get("/me", protect, getMe);
 
 module.exports = router;
