@@ -22,21 +22,6 @@ const userSchema = new mongoose.Schema(
       required: true,
       minlength: 6,
     },
-    // 🔵 Profile picture (Base64 or URL)
-    profilePicture: {
-      type: String,
-      default: null,
-    },
-    // 🔵 NEW: Track if they used Google Login
-    isGoogleUser: {
-      type: Boolean,
-      default: false,
-    },
-    // 🔵 NEW: last seen timestamp
-    lastSeen: {
-      type: Date,
-      default: null,
-    },
   },
   { timestamps: true }
 );
@@ -53,6 +38,6 @@ userSchema.methods.matchPassword = async function (enteredPassword) {
   return bcrypt.compare(enteredPassword, this.password);
 };
 
-const User = mongoose.model("User", userSchema);
+const User = mongoose.model("User", userSchema); // collection: 'users'
 
 module.exports = User;
